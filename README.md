@@ -2,134 +2,158 @@
 
 # 📡 Clash Auto Switch
 
-**Clash 代理自动监听切换器 —— 节点劣化自动切换，本地看板实时可视**
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-*Auto-switch your Clash nodes when they degrade. Local dashboard included.*
+**Auto-switch your Clash nodes before you feel the lag — with a live local dashboard.**
+
+节点劣化自动切换，本地看板实时可视。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-lightgrey)
+[![Build macOS App](https://github.com/GosuQuan/clash-auto-switch/actions/workflows/build-mac.yml/badge.svg)](https://github.com/GosuQuan/clash-auto-switch/actions/workflows/build-mac.yml)
 
-<img src="docs/demo.gif" alt="看板演示" width="900">
+<img src="docs/demo.gif" alt="Dashboard demo" width="900">
 
-*看板实时展示：当前节点体检指标 / 全节点吞吐实测 / 自动切换记录 / 运行日志*
+*Live view: current node health / full-node throughput tests / auto-switch history / logs*
 
 </div>
 
 ---
 
-还在手动切 Clash 节点？延迟看着不高却卡成 PPT？这个工具每 30 秒对策略组做一次「延迟 + **真实吞吐**」双重体检，节点劣化自动切换，**硬性排除香港节点，日本/新加坡等低延迟地区优先**，并内置本地 Web 看板。
+Still manually switching Clash nodes? Low ping but the page still won't load? This tool health-checks your proxy group every 30 seconds with **latency + real throughput**, switches away from degraded nodes automatically, **hard-blocks Hong Kong nodes, prefers low-latency regions like Japan/Singapore**, and ships with a local web dashboard.
 
-## ✨ 功能特性
+## ✨ Features
 
-- 🔄 **自动巡检**：每 30s 通过 mihomo 外部控制器 API 组测速（内核并发，结果稳定）
-- 📊 **真实吞吐验证**：不只看延迟，切到节点实测下载速度，"测速 76ms 却刷不开网页"的假活节点无所遁形
-- 🌏 **地区策略**：地区黑名单（默认禁香港）+ 地区优先级（日本 > 新加坡 > 台湾 > 美国 > 英国）+ 线路类型偏好
-- 🪄 **地区轮转抽样**：每轮按地区轮转实测 8 个节点，组测速丢包时高优先地区照样被验证
-- 🛡 **防抖机制**：45% 评分领先阈值 + 120s 切换冷却 + 测速失败重试，不会在两个节点间反复横跳
-- 📡 **本地看板**：浏览器实时查看体检结果/切换历史/日志，支持立即巡检、暂停、手动切换
-- 🖥 **系统托盘**：托盘常驻 + 气泡通知，右键即可操作（Windows / macOS 菜单栏）
-- 🔇 **零依赖运行**：打包后单文件免 Python 环境；不修改 Clash 配置文件，只调 API
+- 🔄 **Automatic checks** — group-wide latency test via the mihomo external controller API every 30s (concurrency handled by the core, stable results)
+- 📊 **Real throughput verification** — not just ping: each candidate gets a real download test, so "76ms but unusable" nodes get exposed
+- 🌏 **Region strategy** — region blacklist (Hong Kong blocked by default) + region priority (Japan > Singapore > Taiwan > US > UK) + line-type preference
+- 🪄 **Region round-robin sampling** — 8 nodes verified per round, spread across regions so high-priority regions always get tested even when group delay tests drop packets
+- 🛡 **Anti-flapping** — 45% score-lead threshold + 120s switch cooldown + speed-test retry
+- 📡 **Local dashboard** — live health results / switch history / logs in your browser; trigger a scan, pause, or manually switch
+- 🖥 **System tray** — tray icon with notifications; right-click menu on Windows, menu bar on macOS
+- 🔇 **No runtime deps** — single-file builds, no Python needed; never edits your Clash config, only calls the API
 
-## 🚀 快速开始
+## 🎯 Why not just use built-in url-test?
 
-> 前提：已安装并运行 [Clash Verge Rev](https://github.com/clash-verge-rev/clash-verge-rev)（mihomo 内核），且开启了「外部控制器」。
-> 工具会自动从 Verge 配置读取控制器地址与 secret（默认 `127.0.0.1:9097`）。
+Built-in strategy groups (`url-test` / `fallback`) answer *"what do I do when a node is dead?"*.
+This tool answers *"what do I do when a node is still alive but already bad?"* — plus it treats your region and line preferences as first-class rules.
+
+| Capability | **This tool** | Built-in `url-test` / `fallback` | Speed-test CLIs |
+| --- | --- | --- | --- |
+| Decision input | latency + **real throughput** | HTTP probe latency only | latency (some with speed) |
+| Detects "alive but useless" nodes | ✅ (76ms / 0Mbps gets dropped) | ❌ always picked by url-test | ⚠️ tests but doesn't switch |
+| Degradation awareness (works, but slow) | ✅ dual latency/throughput thresholds trigger a switch | ❌ fallback reacts only to full outages | ❌ |
+| Region blacklist / priority | ✅ first-class, survives subscription changes | ❌ requires hand-editing provider configs | ❌ |
+| Anti-flapping | ✅ 45% score-lead threshold + 120s cooldown + retries | ❌ re-picks by raw latency every interval | — |
+| Unattended auto-switching | ✅ every 30s | ✅ | ❌ one-shot reports |
+| Traceable switch reasons | ✅ every switch logged with its "why" in the dashboard | ❌ | — |
+| Usable by non-CLI people | ✅ single file + tray + dashboard + notifications | ✅ (but the strategy is naive) | ❌ pure CLI |
+| Non-invasive | ✅ REST API only | — | ✅ |
+
+**Measured during development** (one sample window, your mileage will vary):
+
+> The group delay test reported **32/32 nodes reachable**; real throughput testing found only **10** actually usable. One Japan node measured **76ms latency, 0 Mbps throughput** — a textbook "zombie" node that `url-test` would happily keep serving. Without retry logic, this tool itself flapped between two US nodes every 60s; the retry + cooldown + score-lead thresholds eliminated it.
+
+## 🚀 Getting Started
+
+> **Prerequisite:** [Clash Verge Rev](https://github.com/clash-verge-rev/clash-verge-rev) (mihomo core) running with the **External Controller** enabled.
+> The tool reads the controller address and secret from Verge's config automatically (default `127.0.0.1:9097`).
 
 ### 🪟 Windows
 
-**方式一：直接用打包好的 exe**
+**Option 1: ready-made executable**
 
-1. 从 [Releases](../../releases) 下载 `ClashAutoSwitch.exe`（或自行构建，见下文）
-2. 双击运行 → 托盘出现图标 + 气泡提示 → 浏览器自动打开看板 `http://127.0.0.1:38766`
-3. 完成，之后它每 30 秒自动巡检切换
+1. Download `ClashAutoSwitch.exe` from [Releases](../../releases) (or build it yourself, see below)
+2. Double-click → tray icon appears with a notification → dashboard opens at `http://127.0.0.1:38766`
+3. Done. It now checks and switches every 30 seconds
 
-**方式二：源码运行（需 Python 3.10+）**
+**Option 2: run from source (Python 3.10+)**
 
 ```bat
 pip install pystray pillow
 python clash_auto_switch.py
 ```
 
-**Windows 小贴士**
+**Windows tips**
 
-| 需求 | 操作 |
+| Need | How |
 | --- | --- |
-| 桌面快捷方式 | 直接给 exe 创建快捷方式即可 |
-| 开机自启 | `Win+R` → `shell:startup` → 把快捷方式放进去 |
-| 停止 | 托盘右键 → 退出 |
-| 杀软误报 | 把程序所在文件夹加入信任区即可（exe 用了固定解压目录 `runtime-tmp/`，多数杀软不再拦截） |
+| Desktop shortcut | Just create a shortcut to the exe |
+| Start at login | `Win+R` → `shell:startup` → drop the shortcut in |
+| Stop | Tray icon → Exit |
+| Antivirus flags it | Add the program folder to your AV's trust list (the exe extracts to a fixed `runtime-tmp/` dir, so most AVs leave it alone) |
 
 ### 🍎 macOS
 
 ```bash
-git clone https://github.com/<you>/clash-auto-switch.git
+git clone https://github.com/GosuQuan/clash-auto-switch.git
 cd clash-auto-switch
-bash build_mac.sh        # 一键构建 dist/ClashAutoSwitch.app 并打出 DMG
+bash build_mac.sh        # builds dist/ClashAutoSwitch.app and a DMG
 open dist/ClashAutoSwitch.app
 ```
 
-也可以不装任何东西，用 **GitHub Actions 云构建**：把本仓库推到 GitHub → Actions → *Build macOS App* → Run workflow → 下载产物里的 `ClashAutoSwitch-macOS.dmg`。
+No Mac around? Use **GitHub Actions**: push this repo → Actions → *Build macOS App* → Run workflow → download `ClashAutoSwitch-macOS.dmg` from artifacts.
 
-**macOS 小贴士**
+**macOS tips**
 
-| 需求 | 操作 |
+| Need | How |
 | --- | --- |
-| 首次打开被 Gatekeeper 拦 | **右键 app → 打开**；或 `xattr -cr /Applications/ClashAutoSwitch.app` |
-| 配置 / 日志位置 | `~/Library/Application Support/clash-auto-switch/` |
-| 托盘 | 顶部菜单栏图标；气泡通知需在系统设置中允许 |
-| 分发 | `build_mac.sh` 会同时产出 `ClashAutoSwitch-macOS.dmg`，可直接发给朋友 |
+| Gatekeeper blocks first launch | **Right-click the app → Open**; or `xattr -cr /Applications/ClashAutoSwitch.app` |
+| Config / log location | `~/Library/Application Support/clash-auto-switch/` |
+| Tray | Menu bar icon; allow notifications in System Settings |
+| Sharing | `build_mac.sh` also produces `ClashAutoSwitch-macOS.dmg`, ready to send to friends |
 
-### 🌐 使用看板（两个平台一致）
+### 🌐 The dashboard (same on both platforms)
 
-启动后浏览器打开 `http://127.0.0.1:38766`（不自动弹就手动开）：
+Open `http://127.0.0.1:38766` after launch (auto-opens by default):
 
-- **当前节点卡片**：地区 / 延迟 / 吞吐 / 评分
-- **本轮体检结果**：每个节点的实测数据与是否可用
-- **切换记录 / 运行日志**：每次自动切换的原因都可追溯
-- **手动切换**：下拉选节点一键切走，之后 10 分钟内自动切换只响应"彻底失效"，不抢你的手动选择
+- **Current node card** — region / latency / throughput / score
+- **Round results** — measured data for every tested node
+- **Switch history / logs** — every automatic switch has a recorded reason
+- **Manual switch** — pick any node from the dropdown; for the next 10 minutes auto-switching only reacts to hard failures, so it won't fight your choice
 
-## 🧠 工作原理
+## 🧠 How it works
 
 ```
-每 30s 一轮巡检
- ├─ 1. 连通性守卫：当前节点 gstatic 204 检查
- ├─ 2. 组测速：一次 API 调用测全组延迟（内核并发）
- ├─ 3. 地区轮转抽样：日本→新加坡→台湾→美国→英国 各取最优，共 8 个
- ├─ 4. 逐个实测吞吐：切换 → 下载 Cloudflare 测速文件（失败重试 1 次）
- ├─ 5. 评分排序：
- │      score = 地区优先级×1000 + 线路类型×50 + 延迟/1000×400 + 100/吞吐×300
- │      （分数越低越好）
- └─ 6. 决策：
-        当前节点失效/劣化        → 立即切换
-        有节点评分领先 ≥45%       → 切换（120s 冷却防抖）
-        手动保持期内             → 只响应硬故障
+Every 30s:
+ ├─ 1. Guard check — gstatic 204 through the current node
+ ├─ 2. Group delay test — one API call, concurrency in the core
+ ├─ 3. Region round-robin — pick the best of JP → SG → TW → US → UK, 8 nodes total
+ ├─ 4. Throughput verification — switch to each node, download a Cloudflare file (retry once)
+ ├─ 5. Score:
+ │      score = region_rank×1000 + line_rank×50 + latency/1000×400 + 100/throughput×300
+ │      (lower is better)
+ └─ 6. Decide:
+        current node failed / degraded   → switch now
+        best node leads by ≥45%          → switch (120s cooldown)
+        manual-hold period               → react to hard failures only
 ```
 
-**地区识别**基于节点名称中的旗帜 emoji 与关键词（日本/JP/Tokyo…），**黑名单**同样按名称匹配（默认 `香港 / HK / Hong Kong`），换订阅无需改配置。
+**Region detection** uses flag emoji and keywords in node names (日本/JP/Tokyo…). The **blacklist** matches names the same way (default `香港 / HK / Hong Kong`). Switching subscriptions requires no config change.
 
-## ⚙️ 配置说明（config.json）
+## ⚙️ Configuration (config.json)
 
 ```jsonc
 {
-  "controller": "127.0.0.1:9097",   // 外部控制器
-  "mixed_port": 7897,               // Verge 混合端口（吞吐实测走这里）
-  "target_groups": [],              // 接管的策略组；留空自动挑选
-  "blocked_regions": ["香港", "Hong Kong", "HK"],   // 硬排除
+  "controller": "127.0.0.1:9097",   // external controller
+  "mixed_port": 7897,               // Verge mixed port (throughput tests go through it)
+  "target_groups": [],              // groups to manage; empty = auto-pick
+  "blocked_regions": ["香港", "Hong Kong", "HK"],
   "region_priority": { "日本": 1, "新加坡": 2, "台湾": 3, "美国": 4, "英国": 5 },
-  "interval": 30,                   // 巡检周期（秒）
-  "candidate_limit": 8,             // 每轮实测吞吐的节点数
-  "max_latency_ms": 1500,           // 延迟超过即判不可用
-  "min_speed_mbps": 0.8,            // 吞吐低于即判不可用
-  "bad_latency_ms": 1200,           // 当前节点延迟劣化阈值
-  "bad_speed_mbps": 3.0,            // 当前节点吞吐劣化阈值
-  "switch_threshold": 0.45,         // 更优节点需领先 45% 才切换
-  "dashboard_port": 38766,          // 看板端口
-  "open_dashboard": true            // 启动时自动打开浏览器
+  "interval": 30,                   // check interval (seconds)
+  "candidate_limit": 8,             // nodes throughput-tested per round
+  "max_latency_ms": 1500,
+  "min_speed_mbps": 0.8,
+  "bad_latency_ms": 1200,           // current-node degraded thresholds
+  "bad_speed_mbps": 3.0,
+  "switch_threshold": 0.45,         // required score lead to switch
+  "dashboard_port": 38766,
+  "open_dashboard": true
 }
 ```
 
-## 📦 从源码构建
+## 📦 Build from source
 
 ```bash
 pip install pyinstaller pystray pillow
@@ -145,50 +169,50 @@ pyinstaller --clean -y --noconsole --icon icon.ico \
 bash build_mac.sh
 ```
 
-> 💡 Windows 建议保留 `--runtime-tmpdir`：部分杀软会拦截 exe 向 `%TEMP%` 解压 DLL。
+> 💡 Keep `--runtime-tmpdir` on Windows: some antivirus products block exe files from extracting DLLs into `%TEMP%`.
 
-## 🛠 开发
+## 🛠 Development
 
 ```bash
-python clash_auto_switch.py --list     # 列出候选/被排除节点
-python clash_auto_switch.py --once     # 只跑一轮巡检
-python clash_auto_switch.py --status   # 查看状态
-python clash_auto_switch.py --switch "节点名"
+python clash_auto_switch.py --list     # list candidates / excluded nodes
+python clash_auto_switch.py --once     # run a single check round
+python clash_auto_switch.py --status   # show status
+python clash_auto_switch.py --switch "node name"
 
-# 重新生成 README 的演示 GIF（模拟数据，不含真实订阅信息）
-python scripts/demo_server.py          # 终端 1
-python scripts/make_gif.py             # 终端 2
+# Regenerate the demo GIF for this README (mock data, no real subscription info)
+python scripts/demo_server.py          # terminal 1
+python scripts/make_gif.py             # terminal 2
 ```
 
 ## ❓ FAQ
 
 <details>
-<summary>为什么延迟很低的节点被跳过了？</summary>
+<summary>Why are some low-latency nodes skipped?</summary>
 
-延迟只代表控制面探测可达，不代表隧道可用。本工具以实测吞吐为准——下载跑不起来就是不可用。
+Latency only proves the probe is reachable — not that the tunnel works. This tool trusts measured throughput: if the download can't run, the node is unusable.
 </details>
 
 <details>
-<summary>巡检期间网络会抖一下？</summary>
+<summary>My network hiccups during a check round?</summary>
 
-会。逐节点吞吐实测需要真的把策略组切到该节点下载几 MB，单节点约 3~5 秒。巡检结束后立即恢复最优节点。
+Yes, briefly. Throughput verification actually switches the group to each node and downloads a few MB (~3–5s each). The best node is restored right after.
 </details>
 
 <details>
-<summary>支持 Clash Premium / 原版 Clash 吗？</summary>
+<summary>Does it work with original Clash / Clash Premium?</summary>
 
-理论上有外部控制器 API 即可，但仅在 Clash Verge Rev（mihomo 内核）下测试过。组测速接口 `/group/{name}/delay` 为 mihomo 特有。
+Anything with the external controller API should work in principle, but it's only tested with Clash Verge Rev (mihomo). The group delay endpoint `/group/{name}/delay` is mihomo-specific.
 </details>
 
 <details>
-<summary>切换会改动我的订阅/配置文件吗？</summary>
+<summary>Does switching touch my subscription or config files?</summary>
 
-不会。只通过 REST API 切换策略组当前选中项，等价于你在面板里点了一下别的节点。
+No. It only calls the REST API to change the selected node of a group — exactly what you'd do by clicking in the Verge panel.
 </details>
 
-## ⚠️ 免责声明
+## ⚠️ Disclaimer
 
-本项目仅供个人学习与本地网络质量诊断使用，请遵守所在地区法律法规，仅用于你拥有合法使用权的订阅服务。项目不提供、不内置、不分发任何代理节点或订阅。
+This project is for personal study and local network quality diagnostics only. Comply with the laws of your region and only use services you are entitled to. The project does not provide, bundle, or distribute any proxy nodes or subscriptions.
 
 ## 📄 License
 
