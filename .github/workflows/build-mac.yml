@@ -1,0 +1,49 @@
+name: Build macOS App
+
+on:
+  workflow_dispatch:        # 手动触发
+  push:
+    tags: ["v*"]
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller pystray pyobjc-framework-Cocoa pyobjc-framework-Quartz pillow
+
+      - name: 构建 .app
+        run: >
+          pyinstaller --clean -y --windowed
+          --icon icon.icns
+          --add-data "icon.ico:."
+          --hidden-import pystray --hidden-import pystray._darwin
+          --osx-bundle-identifier com.clash.autoswitch
+          --name ClashAutoSwitch
+          clash_auto_switch.py
+
+      - name: 压缩
+        run: cd dist && zip -rq ../ClashAutoSwitch-macOS.zip ClashAutoSwitch.app
+
+      - name: 打包 DMG
+        run: >
+          hdiutil create -volname "ClashAutoSwitch"
+          -srcfolder dist/ClashAutoSwitch.app
+          -ov -format UDZO
+          ClashAutoSwitch-macOS.dmg
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClashAutoSwitch-macOS
+          path: |
+            ClashAutoSwitch-macOS.dmg
+            ClashAutoSwitch-macOS.zip

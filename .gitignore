@@ -1,0 +1,24 @@
+# 运行产物 / 本机数据（不上传）
+auto-switch.log*
+state.json
+config.json
+verge-config.yaml
+runtime-tmp/
+build/
+dist/
+*.spec
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# 截图工作目录（GIF/PNG 成品在 docs/，中间帧不上传）
+docs/shots/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# �������ﲻ���汾�⣨Releases / Actions ������
+ClashAutoSwitch.exe
